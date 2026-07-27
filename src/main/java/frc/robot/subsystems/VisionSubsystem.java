@@ -54,9 +54,14 @@ public class VisionSubsystem extends SubsystemBase {
 
     }
     private final List<VisionCamera> cameras = new ArrayList<>();
-    
+
     private Optional<EstimatedRobotPose> latestEstimate = Optional.empty();
     private final CommandSwerveDrivetrain drivetrain;
+    // True once odometry has been snapped to a trusted vision pose. Starts false so the very
+    // first good tag sighting overwrites the default (0,0,0) pose instead of being rejected
+    // for disagreeing with it. Re-armed while disabled so the robot re-locks if it's picked up
+    // and placed down between auto and teleop.
+    private boolean poseSeeded = false;
     
     private final AprilTagFieldLayout tagLayout;
     public VisionSubsystem(CommandSwerveDrivetrain drivetrain){
@@ -146,13 +151,20 @@ public class VisionSubsystem extends SubsystemBase {
 
     Pose2d visionPose = estimate.get().estimatedPose.toPose2d();
     System.out.println("estimate found");
-    //double timestamp = estimate.get().timestampSeconds;
     double timestamp = estimate.get().timestampSeconds;
 
-    double jump = visionPose.getTranslation().getDistance(currentPose.getTranslation());
+    if (!poseSeeded) {
+        // First trusted read since boot/re-arm: snap odometry straight to it instead of
+        // blending, since the current pose (default or stale) has no claim to being correct.
+        drivetrain.resetPose(visionPose);
+        poseSeeded = true;
+        System.out.println("Seeded pose from vision: " + visionPose);
+        latestEstimate = estimate;
+        return;
+    }
 
-    if (jump > 1.0) return;
-    // Feed vision pose into drivetrain Kalman filter
+    // Feed vision pose into drivetrain Kalman filter; std devs (set on the drivetrain)
+    // already down-weight noisy/far-away readings, so no extra hard distance gate here.
     drivetrain.addVisionMeasurement(visionPose, timestamp);
     System.out.println("Adding vision measurement: " + visionPose);
     }
@@ -166,6 +178,10 @@ public class VisionSubsystem extends SubsystemBase {
     @Override
     // Get the latest estimated pose from PhotonVision through 3 different methods for safety
     public void periodic() {
+    if (DriverStation.isDisabled()) {
+        // re-lock to vision if the robot gets picked up/repositioned while disabled
+        poseSeeded = false;
+    }
     //get a recent robot pose from drivetrain
     Pose2d currentPose = drivetrain.getState().Pose;
     //camera height in meters add later

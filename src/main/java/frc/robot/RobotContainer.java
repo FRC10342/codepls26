@@ -17,6 +17,7 @@ import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.RunCommand;
 import edu.wpi.first.wpilibj2.command.SequentialCommandGroup;
@@ -89,6 +90,10 @@ public class RobotContainer {
     private final AimCommand aim;
 
     private final ShootCommand shoot;
+
+    // Hold-to-score: runs align (yaw) and aim (pitch) continuously, and only starts
+    // feeding balls once the drivetrain is actually on-target.
+    private final Command alignAimShoot;
     
     private final ShooterSubsystem shootvar;
 
@@ -136,6 +141,12 @@ public class RobotContainer {
         shoot = new ShootCommand(shootvar);
         intakeAuto = new IntakeAutoCommand(shootvar);
         aimCommandDown = new AimCommandDown(pitchvar);
+
+        alignAimShoot = Commands.parallel(
+            align,
+            aim,
+            Commands.waitUntil(align::isAligned).andThen(shoot)
+        );
 
         NamedCommands.registerCommand("IntakeCommand", new IntakeAutoCommand(shootvar).withTimeout(2)); //Placeholder
         NamedCommands.registerCommand("ClimbCommand", new ClimbCommand(shootvar).withTimeout(5)); //Placeholder
@@ -196,9 +207,12 @@ public class RobotContainer {
         );
 
         joystick.leftTrigger().whileTrue(aimCommandDown);
-        joystick.rightTrigger().whileTrue(aim);
 
-       //joystick.rightTrigger().whileTrue(align);
+        // Hold to auto-score: align yaw to the hub, aim pitch, and shoot once on-target.
+        joystick.rightTrigger().whileTrue(alignAimShoot);
+
+        // Side-project continuous AprilTag tracking test (see AlignTest) - never bound before.
+        joystick.b().whileTrue(aligntest);
 
         //joystick.b().onTrue(new PitchDownSup(pitchsup::getPitch));
 
@@ -218,6 +232,9 @@ public class RobotContainer {
         joystick.povDown().whileTrue(climbdown);
 
         joystick.rightBumper().whileTrue(agitate);//backwards roller
+
+        // Eject everything (was built but never bound to anything). Rebind if Back is wanted for something else.
+        joystick.back().whileTrue(dump);
 
         drivetrain.registerTelemetry(logger::telemeterize);
 

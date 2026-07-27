@@ -40,13 +40,26 @@ public class AlignTest extends Command {
             Optional <Pose2d> optionaltagPose = vision.getRobotToTagPose();
             if (optionaltagPose.isEmpty()) {
                 //System.out.println("No tag detected");
+                // no tag this cycle: stop turning instead of coasting at the last commanded rate
+                drivetrain.setControl(
+                    new SwerveRequest.FieldCentric()
+                    .withVelocityX(0)
+                    .withVelocityY(0)
+                    .withRotationalRate(0)
+                );
                 return;
             }
             if (optionaltagPose.isPresent()){
                 Pose2d tagPose = optionaltagPose.get();
                 //System.out.println("align request found tag");
                 Translation2d robotToTag = tagPose.getTranslation();
-                Rotation2d targetAngle = robotToTag.getAngle(); // angle robot should face NOT CURRENT ANGLE
+                // robotToTag's bearing is relative to the robot's own heading (it's built from
+                // robot-to-camera + camera-to-tag transforms), so it has to be added onto the
+                // robot's current field heading to get an absolute target heading. Feeding the
+                // raw relative bearing straight into the controller (as before) compared it
+                // against an absolute heading measurement, so the setpoint was only correct
+                // when the robot happened to already be facing field-zero.
+                Rotation2d targetAngle = robotPose.getRotation().plus(robotToTag.getAngle());
                 //System.out.println("angle:" + targetAngle);
                 double rotationSpeed = rotationController.calculate(
                 robotPose.getRotation().getRadians(),

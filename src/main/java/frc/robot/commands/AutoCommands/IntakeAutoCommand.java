@@ -31,9 +31,11 @@ public class IntakeAutoCommand extends Command {
     }
     @Override
     public void end(boolean interrupted){
-        //intakeHingeTalon.setControl(new PositionDutyCycle(startPosition)); //Placeholder 
-        intakeHingeTalon.set(-0.2); 
-        intakeRollerTalon.set(0);   
+        //intakeHingeTalon.setControl(new PositionDutyCycle(startPosition)); //Placeholder
+        // was -0.2 (left driving open-loop indefinitely with no software limit behind it); zeroed
+        // to match every other command's end() in this codebase.
+        intakeHingeTalon.set(0);
+        intakeRollerTalon.set(0);
     }
 
     @Override

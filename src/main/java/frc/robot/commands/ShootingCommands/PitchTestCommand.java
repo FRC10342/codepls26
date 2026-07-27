@@ -2,20 +2,18 @@ package frc.robot.commands.ShootingCommands;
 
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.subsystems.PitchSubsystem;
-import frc.robot.subsystems.ShooterSubsystem;
 
 import com.ctre.phoenix6.controls.PositionDutyCycle;
 
 
 public class PitchTestCommand extends Command {
-    private ShooterSubsystem shooter;
     private double angle;
     private double startPosition;
     private PitchSubsystem pitch;
     public PitchTestCommand(PitchSubsystem pitch, double angle){
-            addRequirements(shooter);
             this.angle = angle;
             this.pitch = pitch;
+            addRequirements(pitch);
     }
     @Override
     public void initialize(){
