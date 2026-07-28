@@ -17,6 +17,7 @@ import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.RunCommand;
 import edu.wpi.first.wpilibj2.command.SequentialCommandGroup;
@@ -29,19 +30,13 @@ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 import frc.robot.commands.ShootingCommands.AlignTest;
 import frc.robot.commands.IntakeCommand;
 import frc.robot.commands.IntakeHingeCommand;
-import frc.robot.commands.IntakeHingeCommandUp;
 import frc.robot.commands.AutoCommands.IntakeAutoCommand;
 //import frc.robot.commands.AutoCommands.ShootAutoCommand;
-import frc.robot.commands.ShootingCommands.AimCheatsCommand;
 import frc.robot.commands.ShootingCommands.AimCommand;
 import frc.robot.commands.ShootingCommands.AimCommandDown;
 import frc.robot.commands.ShootingCommands.AlignCommand;
 import frc.robot.commands.ShootingCommands.ShootCommand;
 import frc.robot.commands.AgitateRollerTest;
-import frc.robot.commands.ClimbCommand;
-import frc.robot.commands.ClimbDownCommand;
-import frc.robot.commands.IntakeHingeCommand;
-//import frc.robot.commands.ClimbCommand;
 import frc.robot.commands.DumpIntakeCommand;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
@@ -89,6 +84,10 @@ public class RobotContainer {
     private final AimCommand aim;
 
     private final ShootCommand shoot;
+
+    // Hold-to-score: runs align (yaw) and aim (pitch) continuously, and only starts
+    // feeding balls once the drivetrain is actually on-target.
+    private final Command alignAimShoot;
     
     private final ShooterSubsystem shootvar;
 
@@ -99,10 +98,6 @@ public class RobotContainer {
     private final AgitateRollerTest agitate;
 
     private final DumpIntakeCommand dump;
-
-    private final ClimbCommand climb;
-
-    private final ClimbDownCommand climbdown;
 
     private final SendableChooser<Command> autoChooser;
 
@@ -129,17 +124,19 @@ public class RobotContainer {
         auto = new DriveSubsystem(drivetrain);
         agitate = new AgitateRollerTest(shootvar);
         dump = new DumpIntakeCommand(shootvar);
-        climb = new ClimbCommand(shootvar);
-        climbdown = new ClimbDownCommand(shootvar); 
         aligntest = new AlignTest(vision, drivetrain);
         //autoShoot = new ShootAutoCommand(shootvar);
         shoot = new ShootCommand(shootvar);
         intakeAuto = new IntakeAutoCommand(shootvar);
         aimCommandDown = new AimCommandDown(pitchvar);
 
+        alignAimShoot = Commands.parallel(
+            align,
+            aim,
+            Commands.waitUntil(align::isAligned).andThen(shoot)
+        );
+
         NamedCommands.registerCommand("IntakeCommand", new IntakeAutoCommand(shootvar).withTimeout(2)); //Placeholder
-        NamedCommands.registerCommand("ClimbCommand", new ClimbCommand(shootvar).withTimeout(5)); //Placeholder
-        NamedCommands.registerCommand("ClimbDownCommand", new ClimbCommand(shootvar).withTimeout(5)); //Placeholder
         //NamedCommands.registerCommand("AutoShoot", new ShootAutoCommand(shootvar).withTimeout(3)); //Placeholder
         NamedCommands.registerCommand("AutoShoot", new ShootCommand(shootvar).withTimeout(3)); //Placeholder
        // NamedCommands.registerCommand("FarAutoPitchShoot", new PitchTestCommand(pitchvar, 0.25));
@@ -196,9 +193,12 @@ public class RobotContainer {
         );
 
         joystick.leftTrigger().whileTrue(aimCommandDown);
-        joystick.rightTrigger().whileTrue(aim);
 
-       //joystick.rightTrigger().whileTrue(align);
+        // Hold to auto-score: align yaw to the hub, aim pitch, and shoot once on-target.
+        joystick.rightTrigger().whileTrue(alignAimShoot);
+
+        // Side-project continuous AprilTag tracking test (see AlignTest) - never bound before.
+        joystick.b().whileTrue(aligntest);
 
         //joystick.b().onTrue(new PitchDownSup(pitchsup::getPitch));
 
@@ -206,18 +206,16 @@ public class RobotContainer {
 
         //joystick.b().onTrue(aim);
         joystick.y().whileTrue(new IntakeCommand(shootvar));
-        
-        joystick.povRight().whileTrue(new IntakeHingeCommandUp(shootvar)); 
-        
-        //joystick.y().whileTrue(new ClimbCommand(shootvar));
+
+        // povRight, povUp, povDown are free - IntakeHingeCommandUp/ClimbCommand/ClimbDownCommand
+        // were removed as unnecessary for the new robot.
 
         joystick.povLeft().onTrue(new IntakeHingeCommand(shootvar).withTimeout(0.25));
 
-        joystick.povUp().whileTrue(climb);
-
-        joystick.povDown().whileTrue(climbdown);
-
         joystick.rightBumper().whileTrue(agitate);//backwards roller
+
+        // Eject everything (was built but never bound to anything). Rebind if Back is wanted for something else.
+        joystick.back().whileTrue(dump);
 
         drivetrain.registerTelemetry(logger::telemeterize);
 

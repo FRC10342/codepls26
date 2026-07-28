@@ -9,7 +9,6 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.geometry.Rotation3d;
 
 import com.ctre.phoenix6.swerve.SwerveRequest;
 
@@ -57,7 +56,7 @@ public class AlignCommand extends Command {
             if (zone == ZoneBasedTargeting.Zone.OUR_ZONE){
                 Translation2d robotToTag = targetPose.getTranslation().minus(robotPose.getTranslation());
                 double distance = robotToTag.getNorm();
-                Rotation2d targetAngle = robotToTag.getAngle().plus(new Rotation3d(0, 0, Math.PI).toRotation2d()); // angle robot should face NOT CURRENT ANGLE
+                Rotation2d targetAngle = robotToTag.getAngle(); // angle robot should face NOT CURRENT ANGLE
 
                 
                 double rotationSpeed = rotationController.calculate(
@@ -81,7 +80,8 @@ public class AlignCommand extends Command {
                 }
                 }
 
-                rotationSpeed = MathUtil.clamp(rotationSpeed, -0.5, 0.5);
+                // was clamped to +-0.5 rad/s here but not in the alliance-wall branch below,
+                // making hub-align crawl compared to wall-align at the same PID gains - now consistent.
                 forwardSpeed = MathUtil.clamp(forwardSpeed, -2.0, 2.0);
 
                 // feed speeds to drivetrain
@@ -131,8 +131,13 @@ public class AlignCommand extends Command {
         }
         @Override
         public boolean isFinished() {
+        return false; // keeps running until cancelled (e.g. trigger released)
+        }
+
+        /** True once the drivetrain is facing the current target heading within tolerance. */
+        public boolean isAligned() {
         return rotationController.atSetpoint();
-        }  
+        }
     }
 
 

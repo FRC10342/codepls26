@@ -50,7 +50,7 @@ public class ZoneBasedTargeting extends SubsystemBase {
 
         AllianceColor alliance = getAlliance();
 
-        if (alliance == AllianceColor.RED) {
+        if (alliance == AllianceColor.BLUE) {
             if (x >= 0 && x < quarter) {
                 return Zone.OUR_ZONE;
             } else if (x >= quarter && x < 2 * quarter) {
@@ -60,7 +60,7 @@ public class ZoneBasedTargeting extends SubsystemBase {
             } else if (x >= 3 * quarter && x <= FIELD_LENGTH) {
                 return Zone.OPPONENT_ZONE;
             }
-        } else { // BLUE alliance: mirror zones
+        } else { // RED alliance: mirror zones
             if (x >= 0 && x < quarter) {
                 return Zone.OPPONENT_ZONE;
             } else if (x >= quarter && x < 2 * quarter) {

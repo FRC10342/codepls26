@@ -10,6 +10,9 @@ import org.photonvision.PhotonPoseEstimator;
 import org.photonvision.PhotonPoseEstimator.PoseStrategy;
 import org.opencv.photo.Photo;
 import org.photonvision.EstimatedRobotPose;
+import org.photonvision.simulation.PhotonCameraSim;
+import org.photonvision.simulation.SimCameraProperties;
+import org.photonvision.simulation.VisionSystemSim;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.apriltag.AprilTagFields;
@@ -23,6 +26,7 @@ import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Timer;
+import com.ctre.phoenix6.Utils;
 
 import org.photonvision.targeting.PhotonPipelineResult;
 
@@ -34,6 +38,7 @@ public class VisionSubsystem extends SubsystemBase {
     private static class VisionCamera {
         public final PhotonCamera camera;
         public final PhotonPoseEstimator estimator;
+        public final Transform3d robotToCam;
 
         public VisionCamera(
                 String name,
@@ -41,6 +46,7 @@ public class VisionSubsystem extends SubsystemBase {
                 AprilTagFieldLayout layout) {
 
                 camera = new PhotonCamera(name);
+                this.robotToCam = robotToCam;
 
                 estimator = new PhotonPoseEstimator(
                     layout,
@@ -54,10 +60,21 @@ public class VisionSubsystem extends SubsystemBase {
 
     }
     private final List<VisionCamera> cameras = new ArrayList<>();
-    
+
     private Optional<EstimatedRobotPose> latestEstimate = Optional.empty();
     private final CommandSwerveDrivetrain drivetrain;
-    
+    // True once odometry has been snapped to a trusted vision pose. Starts false so the very
+    // first good tag sighting overwrites the default (0,0,0) pose instead of being rejected
+    // for disagreeing with it. Re-armed while disabled so the robot re-locks if it's picked up
+    // and placed down between auto and teleop.
+    private boolean poseSeeded = false;
+
+    // Only present in simulation: feeds simulated AprilTag detections to the cameras above so
+    // there's something for PhotonVision to "see" without a real coprocessor. Without this,
+    // getLatestResult() always comes back empty in sim and align/vision code can never be
+    // exercised there.
+    private final VisionSystemSim visionSim;
+
     private final AprilTagFieldLayout tagLayout;
     public VisionSubsystem(CommandSwerveDrivetrain drivetrain){
         this.drivetrain = drivetrain;
@@ -80,6 +97,18 @@ public class VisionSubsystem extends SubsystemBase {
             );
         cameras.add(new VisionCamera("frtrightCamera", robotTofrtrightCam, tagLayout));
         cameras.add(new VisionCamera("frtleftCamera", robotTofrtleftCam, tagLayout));
+
+        if (Utils.isSimulation()) {
+            visionSim = new VisionSystemSim("main");
+            visionSim.addAprilTags(tagLayout);
+            for (VisionCamera cam : cameras) {
+                SimCameraProperties simProps = SimCameraProperties.PI4_LIFECAM_640_480();
+                PhotonCameraSim cameraSim = new PhotonCameraSim(cam.camera, simProps);
+                visionSim.addCamera(cameraSim, cam.robotToCam);
+            }
+        } else {
+            visionSim = null;
+        }
     }
     /*private boolean isScoringTag(int id) {
     var alliance = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue);
@@ -146,13 +175,20 @@ public class VisionSubsystem extends SubsystemBase {
 
     Pose2d visionPose = estimate.get().estimatedPose.toPose2d();
     System.out.println("estimate found");
-    //double timestamp = estimate.get().timestampSeconds;
     double timestamp = estimate.get().timestampSeconds;
 
-    double jump = visionPose.getTranslation().getDistance(currentPose.getTranslation());
+    if (!poseSeeded) {
+        // First trusted read since boot/re-arm: snap odometry straight to it instead of
+        // blending, since the current pose (default or stale) has no claim to being correct.
+        drivetrain.resetPose(visionPose);
+        poseSeeded = true;
+        System.out.println("Seeded pose from vision: " + visionPose);
+        latestEstimate = estimate;
+        return;
+    }
 
-    if (jump > 1.0) return;
-    // Feed vision pose into drivetrain Kalman filter
+    // Feed vision pose into drivetrain Kalman filter; std devs (set on the drivetrain)
+    // already down-weight noisy/far-away readings, so no extra hard distance gate here.
     drivetrain.addVisionMeasurement(visionPose, timestamp);
     System.out.println("Adding vision measurement: " + visionPose);
     }
@@ -166,8 +202,19 @@ public class VisionSubsystem extends SubsystemBase {
     @Override
     // Get the latest estimated pose from PhotonVision through 3 different methods for safety
     public void periodic() {
+    if (DriverStation.isDisabled()) {
+        // re-lock to vision if the robot gets picked up/repositioned while disabled
+        poseSeeded = false;
+    }
     //get a recent robot pose from drivetrain
     Pose2d currentPose = drivetrain.getState().Pose;
+
+    if (visionSim != null) {
+        // drive the simulated cameras from the (physics-simulated) drivetrain pose so they
+        // generate realistic detections of the tags added in the constructor
+        visionSim.update(currentPose);
+    }
+
     //camera height in meters add later
     double cameraHeightMeters = 0.225;
     //create Pose3d from sample Pose2d

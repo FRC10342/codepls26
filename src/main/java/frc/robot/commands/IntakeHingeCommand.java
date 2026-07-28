@@ -24,16 +24,20 @@ public class IntakeHingeCommand extends Command {
     @Override
     public void initialize(){
         //intakeHingeTalon.setControl(new PositionDutyCycle(startPosition)); //placeholder
+        // NOTE: sign is an unverified guess (opposite of IntakeHingeCommandUp's -0.1 "up" direction) -
+        // confirm which way this actually drives the hinge on real hardware, at low power, before trusting it.
+        intakeHingeTalon.set(0.1);
         shooter.getIntakeMotor().set(0.45);
-        
+
     }
     @Override
     public void end(boolean interrupted){
-        //intakeHingeTalon.setControl(new PositionDutyCycle(startPosition)); //Placeholder 
-        intakeHingeTalon.set(0); 
-        
+        //intakeHingeTalon.setControl(new PositionDutyCycle(startPosition)); //Placeholder
+        intakeHingeTalon.set(0);
+        shooter.getIntakeMotor().set(0); // was left running forever: initialize() drives this motor but end() never stopped it
+
     startPosition = intakeHingeTalon.getPosition().getValueAsDouble();
-            
+
     }
     /*
     @Override
