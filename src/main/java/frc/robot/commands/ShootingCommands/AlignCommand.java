@@ -80,7 +80,8 @@ public class AlignCommand extends Command {
                 }
                 }
 
-                rotationSpeed = MathUtil.clamp(rotationSpeed, -0.5, 0.5);
+                // was clamped to +-0.5 rad/s here but not in the alliance-wall branch below,
+                // making hub-align crawl compared to wall-align at the same PID gains - now consistent.
                 forwardSpeed = MathUtil.clamp(forwardSpeed, -2.0, 2.0);
 
                 // feed speeds to drivetrain

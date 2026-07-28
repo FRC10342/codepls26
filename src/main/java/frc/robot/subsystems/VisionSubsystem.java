@@ -10,6 +10,9 @@ import org.photonvision.PhotonPoseEstimator;
 import org.photonvision.PhotonPoseEstimator.PoseStrategy;
 import org.opencv.photo.Photo;
 import org.photonvision.EstimatedRobotPose;
+import org.photonvision.simulation.PhotonCameraSim;
+import org.photonvision.simulation.SimCameraProperties;
+import org.photonvision.simulation.VisionSystemSim;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.apriltag.AprilTagFields;
@@ -23,6 +26,7 @@ import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Timer;
+import com.ctre.phoenix6.Utils;
 
 import org.photonvision.targeting.PhotonPipelineResult;
 
@@ -34,6 +38,7 @@ public class VisionSubsystem extends SubsystemBase {
     private static class VisionCamera {
         public final PhotonCamera camera;
         public final PhotonPoseEstimator estimator;
+        public final Transform3d robotToCam;
 
         public VisionCamera(
                 String name,
@@ -41,6 +46,7 @@ public class VisionSubsystem extends SubsystemBase {
                 AprilTagFieldLayout layout) {
 
                 camera = new PhotonCamera(name);
+                this.robotToCam = robotToCam;
 
                 estimator = new PhotonPoseEstimator(
                     layout,
@@ -62,7 +68,13 @@ public class VisionSubsystem extends SubsystemBase {
     // for disagreeing with it. Re-armed while disabled so the robot re-locks if it's picked up
     // and placed down between auto and teleop.
     private boolean poseSeeded = false;
-    
+
+    // Only present in simulation: feeds simulated AprilTag detections to the cameras above so
+    // there's something for PhotonVision to "see" without a real coprocessor. Without this,
+    // getLatestResult() always comes back empty in sim and align/vision code can never be
+    // exercised there.
+    private final VisionSystemSim visionSim;
+
     private final AprilTagFieldLayout tagLayout;
     public VisionSubsystem(CommandSwerveDrivetrain drivetrain){
         this.drivetrain = drivetrain;
@@ -85,6 +97,18 @@ public class VisionSubsystem extends SubsystemBase {
             );
         cameras.add(new VisionCamera("frtrightCamera", robotTofrtrightCam, tagLayout));
         cameras.add(new VisionCamera("frtleftCamera", robotTofrtleftCam, tagLayout));
+
+        if (Utils.isSimulation()) {
+            visionSim = new VisionSystemSim("main");
+            visionSim.addAprilTags(tagLayout);
+            for (VisionCamera cam : cameras) {
+                SimCameraProperties simProps = SimCameraProperties.PI4_LIFECAM_640_480();
+                PhotonCameraSim cameraSim = new PhotonCameraSim(cam.camera, simProps);
+                visionSim.addCamera(cameraSim, cam.robotToCam);
+            }
+        } else {
+            visionSim = null;
+        }
     }
     /*private boolean isScoringTag(int id) {
     var alliance = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue);
@@ -184,6 +208,13 @@ public class VisionSubsystem extends SubsystemBase {
     }
     //get a recent robot pose from drivetrain
     Pose2d currentPose = drivetrain.getState().Pose;
+
+    if (visionSim != null) {
+        // drive the simulated cameras from the (physics-simulated) drivetrain pose so they
+        // generate realistic detections of the tags added in the constructor
+        visionSim.update(currentPose);
+    }
+
     //camera height in meters add later
     double cameraHeightMeters = 0.225;
     //create Pose3d from sample Pose2d

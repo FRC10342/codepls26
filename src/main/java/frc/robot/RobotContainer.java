@@ -30,19 +30,13 @@ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 import frc.robot.commands.ShootingCommands.AlignTest;
 import frc.robot.commands.IntakeCommand;
 import frc.robot.commands.IntakeHingeCommand;
-import frc.robot.commands.IntakeHingeCommandUp;
 import frc.robot.commands.AutoCommands.IntakeAutoCommand;
 //import frc.robot.commands.AutoCommands.ShootAutoCommand;
-import frc.robot.commands.ShootingCommands.AimCheatsCommand;
 import frc.robot.commands.ShootingCommands.AimCommand;
 import frc.robot.commands.ShootingCommands.AimCommandDown;
 import frc.robot.commands.ShootingCommands.AlignCommand;
 import frc.robot.commands.ShootingCommands.ShootCommand;
 import frc.robot.commands.AgitateRollerTest;
-import frc.robot.commands.ClimbCommand;
-import frc.robot.commands.ClimbDownCommand;
-import frc.robot.commands.IntakeHingeCommand;
-//import frc.robot.commands.ClimbCommand;
 import frc.robot.commands.DumpIntakeCommand;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
@@ -105,10 +99,6 @@ public class RobotContainer {
 
     private final DumpIntakeCommand dump;
 
-    private final ClimbCommand climb;
-
-    private final ClimbDownCommand climbdown;
-
     private final SendableChooser<Command> autoChooser;
 
     private final PitchSubsystem pitchvar;
@@ -134,8 +124,6 @@ public class RobotContainer {
         auto = new DriveSubsystem(drivetrain);
         agitate = new AgitateRollerTest(shootvar);
         dump = new DumpIntakeCommand(shootvar);
-        climb = new ClimbCommand(shootvar);
-        climbdown = new ClimbDownCommand(shootvar); 
         aligntest = new AlignTest(vision, drivetrain);
         //autoShoot = new ShootAutoCommand(shootvar);
         shoot = new ShootCommand(shootvar);
@@ -149,8 +137,6 @@ public class RobotContainer {
         );
 
         NamedCommands.registerCommand("IntakeCommand", new IntakeAutoCommand(shootvar).withTimeout(2)); //Placeholder
-        NamedCommands.registerCommand("ClimbCommand", new ClimbCommand(shootvar).withTimeout(5)); //Placeholder
-        NamedCommands.registerCommand("ClimbDownCommand", new ClimbCommand(shootvar).withTimeout(5)); //Placeholder
         //NamedCommands.registerCommand("AutoShoot", new ShootAutoCommand(shootvar).withTimeout(3)); //Placeholder
         NamedCommands.registerCommand("AutoShoot", new ShootCommand(shootvar).withTimeout(3)); //Placeholder
        // NamedCommands.registerCommand("FarAutoPitchShoot", new PitchTestCommand(pitchvar, 0.25));
@@ -220,16 +206,11 @@ public class RobotContainer {
 
         //joystick.b().onTrue(aim);
         joystick.y().whileTrue(new IntakeCommand(shootvar));
-        
-        joystick.povRight().whileTrue(new IntakeHingeCommandUp(shootvar)); 
-        
-        //joystick.y().whileTrue(new ClimbCommand(shootvar));
+
+        // povRight, povUp, povDown are free - IntakeHingeCommandUp/ClimbCommand/ClimbDownCommand
+        // were removed as unnecessary for the new robot.
 
         joystick.povLeft().onTrue(new IntakeHingeCommand(shootvar).withTimeout(0.25));
-
-        joystick.povUp().whileTrue(climb);
-
-        joystick.povDown().whileTrue(climbdown);
 
         joystick.rightBumper().whileTrue(agitate);//backwards roller
 
